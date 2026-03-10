@@ -13,14 +13,29 @@ async function extractTextFromPdf(filePath: string): Promise<string> {
   return data.text;
 }
 
+async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
+  const parseFn = pdfParse as unknown as (data: Buffer) => Promise<{ text: string }>;
+  const data = await parseFn(buffer);
+  return data.text;
+}
+
 async function extractTextFromDocx(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath);
   const result = await mammoth.extractRawText({ buffer });
   return result.value;
 }
 
+async function extractTextFromDocxBuffer(buffer: Buffer): Promise<string> {
+  const result = await mammoth.extractRawText({ buffer });
+  return result.value;
+}
+
 async function extractTextFromPlain(filePath: string): Promise<string> {
   return fs.readFile(filePath, "utf8");
+}
+
+async function extractTextFromPlainBuffer(buffer: Buffer): Promise<string> {
+  return buffer.toString("utf8");
 }
 
 async function extractRawText(filePath: string): Promise<string> {
@@ -34,8 +49,19 @@ async function extractRawText(filePath: string): Promise<string> {
   return extractTextFromPlain(filePath);
 }
 
-export async function parseResume(filePath: string): Promise<Resume> {
-  const rawText = (await extractRawText(filePath)).replace(/\r\n/g, "\n");
+async function extractRawTextFromBuffer(buffer: Buffer, originalName: string): Promise<string> {
+  const ext = path.extname(originalName).toLowerCase();
+  if (ext === ".pdf") {
+    return extractTextFromPdfBuffer(buffer);
+  }
+  if (ext === ".docx") {
+    return extractTextFromDocxBuffer(buffer);
+  }
+  return extractTextFromPlainBuffer(buffer);
+}
+
+function parseResumeText(rawTextInput: string): Resume {
+  const rawText = rawTextInput.replace(/\r\n/g, "\n");
   const lines = rawText.split("\n").map((l) => l.trim()).filter(Boolean);
 
   const experiences: Resume["experiences"] = [];
@@ -44,8 +70,14 @@ export async function parseResume(filePath: string): Promise<Resume> {
   const certifications: string[] = [];
   const projects: string[] = [];
 
-  let currentSection: "summary" | "experience" | "education" | "skills" | "projects" | "certifications" | null =
-    null;
+  let currentSection:
+    | "summary"
+    | "experience"
+    | "education"
+    | "skills"
+    | "projects"
+    | "certifications"
+    | null = null;
   const summaryLines: string[] = [];
 
   for (const line of lines) {
@@ -137,3 +169,15 @@ export async function parseResume(filePath: string): Promise<Resume> {
   };
 }
 
+export async function parseResume(filePath: string): Promise<Resume> {
+  const rawText = await extractRawText(filePath);
+  return parseResumeText(rawText);
+}
+
+export async function parseResumeFromBuffer(
+  buffer: Buffer,
+  originalName: string
+): Promise<Resume> {
+  const rawText = await extractRawTextFromBuffer(buffer, originalName);
+  return parseResumeText(rawText);
+}
