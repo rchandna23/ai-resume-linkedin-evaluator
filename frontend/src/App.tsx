@@ -61,7 +61,7 @@ function App() {
 
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:4000/analyze", {
+      const res = await fetch("https://ai-resume-backend-32dl.onrender.com/analyze", {
         method: "POST",
         body: formData,
       });
