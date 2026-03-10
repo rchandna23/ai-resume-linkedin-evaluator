@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import path from "node:path";
-import { parseResume } from "./services/parsers/resumeParser";
+import { parseResumeFromBuffer } from "./services/parsers/resumeParser";
 import { parseLinkedInHtml } from "./services/parsers/linkedinParser";
 import { parseJobDescription } from "./services/parsers/jdParser";
 import { scoreProfile } from "./services/analysis/scoringService";
@@ -11,16 +11,15 @@ import { generateSuggestions } from "./services/suggestions/suggestionEngine";
 const app = express();
 const port = process.env.PORT || 4000;
 
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGIN || "http://localhost:5173",
-  })
-);
+app.use(cors({ origin: true }));
 app.use(express.json({ limit: "2mb" }));
 
 const upload = multer({
-  dest: path.join(__dirname, "..", "uploads"),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    fieldSize: 10 * 1024 * 1024,
+  },
 });
 
 app.post(
@@ -40,10 +39,10 @@ app.post(
       const jd = parseJobDescription(jdText);
 
       const resumeFile = req.file;
-      const resume =
-        resumeFile && resumeFile.path
-          ? await parseResume(resumeFile.path)
-          : null;
+const resume =
+  resumeFile && resumeFile.buffer && resumeFile.originalname
+    ? await parseResumeFromBuffer(resumeFile.buffer, resumeFile.originalname)
+    : null;
 
       const linkedin = linkedinHtml ? parseLinkedInHtml(linkedinHtml) : null;
 
