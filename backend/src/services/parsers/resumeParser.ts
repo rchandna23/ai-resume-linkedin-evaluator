@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import type { Resume } from "../../models/Resume";
 
@@ -8,14 +7,18 @@ const BULLET_REGEX = /^[\u2022\-*•]\s+/;
 
 async function extractTextFromPdf(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath);
-  const parseFn = pdfParse as unknown as (data: Buffer) => Promise<{ text: string }>;
-  const data = await parseFn(buffer);
-  return data.text;
+  return extractTextFromPdfBuffer(buffer);
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const parseFn = pdfParse as unknown as (data: Buffer) => Promise<{ text: string }>;
-  const data = await parseFn(buffer);
+  const mod = (await import("pdf-parse")) as unknown as { default?: unknown };
+  const maybeFn = (mod as any).default ?? (mod as any);
+
+  if (typeof maybeFn !== "function") {
+    throw new Error("pdf-parse export is not a function");
+  }
+
+  const data = await (maybeFn as (data: Buffer) => Promise<{ text: string }>)(buffer);
   return data.text;
 }
 
