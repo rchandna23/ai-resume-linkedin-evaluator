@@ -67,7 +67,9 @@ function App() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to analyze profile.");
+       const details =
+  typeof data.details === "string" && data.details ? `: ${data.details}` : "";
+throw new Error((data.error || "Failed to analyze profile.") + details);
       }
       const data = (await res.json()) as AnalysisResponse;
       setResult(data);
