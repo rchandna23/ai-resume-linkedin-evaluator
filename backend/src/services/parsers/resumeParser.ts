@@ -1,11 +1,12 @@
 import fs from "node:fs/promises";
-import { createRequire } from "node:module";
 import path from "node:path";
 import mammoth from "mammoth";
 import type { Resume } from "../../models/Resume";
 
 const BULLET_REGEX = /^[\u2022\-*•]\s+/;
-const cjsRequire = createRequire(__filename);
+type PdfJsModule = {
+  getDocument: (src: { data: Uint8Array }) => { promise: Promise<any> };
+};
 
 async function extractTextFromPdf(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath);
@@ -13,39 +14,23 @@ async function extractTextFromPdf(filePath: string): Promise<string> {
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const getFnFromModule = (mod: any): ((data: Buffer) => Promise<{ text: string }>) | null => {
-    const candidates = [
-      mod,
-      mod?.default,
-      mod?.default?.default,
-      mod?.pdfParse,
-      mod?.default?.pdfParse,
-    ];
-    const fn = candidates.find((c) => typeof c === "function");
-    return typeof fn === "function" ? fn : null;
-  };
+  const mod = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as PdfJsModule;
+  const loadingTask = mod.getDocument({ data: new Uint8Array(buffer) });
+  const pdf = await loadingTask.promise;
 
-  // Try CommonJS require first (most reliable in Node deploys)
-  try {
-    const cjsMod = cjsRequire("pdf-parse");
-    const fn = getFnFromModule(cjsMod);
-    if (fn) {
-      const data = await fn(buffer);
-      return data.text;
-    }
-  } catch {
-    // ignore and try ESM import
+  const pageCount: number = pdf.numPages ?? 0;
+  const textParts: string[] = [];
+
+  for (let pageNum = 1; pageNum <= pageCount; pageNum += 1) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const strings = (content.items ?? [])
+      .map((it: any) => (typeof it.str === "string" ? it.str : ""))
+      .filter(Boolean);
+    textParts.push(strings.join(" "));
   }
 
-  // Fallback to ESM import
-  const esmMod = (await import("pdf-parse")) as any;
-  const fn = getFnFromModule(esmMod);
-  if (!fn) {
-    throw new Error("pdf-parse export is not a function");
-  }
-
-  const data = await fn(buffer);
-  return data.text;
+  return textParts.join("\n");
 }
 
 async function extractTextFromDocx(filePath: string): Promise<string> {
