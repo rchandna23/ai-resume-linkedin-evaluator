@@ -11,14 +11,23 @@ async function extractTextFromPdf(filePath: string): Promise<string> {
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const mod = (await import("pdf-parse")) as unknown as { default?: unknown };
-  const maybeFn = (mod as any).default ?? (mod as any);
+  const mod = (await import("pdf-parse")) as any;
 
-  if (typeof maybeFn !== "function") {
+  const candidates = [
+    mod,
+    mod?.default,
+    mod?.default?.default,
+    mod?.pdfParse,
+    mod?.default?.pdfParse,
+  ];
+
+  const parseFn = candidates.find((c) => typeof c === "function");
+
+  if (typeof parseFn !== "function") {
     throw new Error("pdf-parse export is not a function");
   }
 
-  const data = await (maybeFn as (data: Buffer) => Promise<{ text: string }>)(buffer);
+  const data = await (parseFn as (data: Buffer) => Promise<{ text: string }>)(buffer);
   return data.text;
 }
 
