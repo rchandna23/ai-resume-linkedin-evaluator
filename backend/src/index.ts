@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
-import path from "node:path";
 import { parseResumeFromBuffer } from "./services/parsers/resumeParser";
 import { parseLinkedInHtml } from "./services/parsers/linkedinParser";
 import { parseJobDescription } from "./services/parsers/jdParser";
@@ -39,10 +38,17 @@ app.post(
       const jd = parseJobDescription(jdText);
 
       const resumeFile = req.file;
-const resume =
-  resumeFile && resumeFile.buffer && resumeFile.originalname
-    ? await parseResumeFromBuffer(resumeFile.buffer, resumeFile.originalname)
-    : null;
+
+let resume = null;
+if (resumeFile && resumeFile.buffer && resumeFile.originalname) {
+  try {
+    resume = await parseResumeFromBuffer(resumeFile.buffer, resumeFile.originalname);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Resume parsing failed";
+    res.status(400).json({ error: "Resume parsing failed", details: message });
+    return;
+  }
+}
 
       const linkedin = linkedinHtml ? parseLinkedInHtml(linkedinHtml) : null;
 
@@ -58,8 +64,8 @@ const resume =
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(err);
-      res.status(500).json({ error: "Failed to analyze profile" });
-    }
+const message = err instanceof Error ? err.message : "Unknown error";
+res.status(500).json({ error: "Failed to analyze profile", details: message });    }
   }
 );
 
