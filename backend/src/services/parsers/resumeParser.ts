@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import mammoth from "mammoth";
 import type { Resume } from "../../models/Resume";
 
 const BULLET_REGEX = /^[\u2022\-*•]\s+/;
+const cjsRequire = createRequire(__filename);
 
 async function extractTextFromPdf(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath);
@@ -11,16 +13,40 @@ async function extractTextFromPdf(filePath: string): Promise<string> {
 }
 
 async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
-  const mod = (await import("pdf-parse")) as any;
+  const getFnFromModule = (mod: any): ((data: Buffer) => Promise<{ text: string }>) | null => {
+    const candidates = [
+      mod,
+      mod?.default,
+      mod?.default?.default,
+      mod?.pdfParse,
+      mod?.default?.pdfParse,
+    ];
+    const fn = candidates.find((c) => typeof c === "function");
+    return typeof fn === "function" ? fn : null;
+  };
 
-  const candidates = [
-    mod,
-    mod?.default,
-    mod?.default?.default,
-    mod?.pdfParse,
-    mod?.default?.pdfParse,
-  ];
+  // 1) Try CommonJS require first (most reliable on Render/Node)
+  try {
+    const cjsMod = cjsRequire("pdf-parse");
+    const fn = getFnFromModule(cjsMod);
+    if (fn) {
+      const data = await fn(buffer);
+      return data.text;
+    }
+  } catch {
+    // ignore and try ESM import
+  }
 
+  // 2) Fallback to ESM import
+  const esmMod = (await import("pdf-parse")) as any;
+  const fn = getFnFromModule(esmMod);
+  if (!fn) {
+    throw new Error("pdf-parse export is not a function");
+  }
+
+  const data = await fn(buffer);
+  return data.text;
+}
   const parseFn = candidates.find((c) => typeof c === "function");
 
   if (typeof parseFn !== "function") {
