@@ -25,7 +25,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
     return typeof fn === "function" ? fn : null;
   };
 
-  // 1) Try CommonJS require first (most reliable on Render/Node)
+  // Try CommonJS require first (most reliable in Node deploys)
   try {
     const cjsMod = cjsRequire("pdf-parse");
     const fn = getFnFromModule(cjsMod);
@@ -37,7 +37,7 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
     // ignore and try ESM import
   }
 
-  // 2) Fallback to ESM import
+  // Fallback to ESM import
   const esmMod = (await import("pdf-parse")) as any;
   const fn = getFnFromModule(esmMod);
   if (!fn) {
@@ -45,15 +45,6 @@ async function extractTextFromPdfBuffer(buffer: Buffer): Promise<string> {
   }
 
   const data = await fn(buffer);
-  return data.text;
-}
-  const parseFn = candidates.find((c) => typeof c === "function");
-
-  if (typeof parseFn !== "function") {
-    throw new Error("pdf-parse export is not a function");
-  }
-
-  const data = await (parseFn as (data: Buffer) => Promise<{ text: string }>)(buffer);
   return data.text;
 }
 
@@ -78,23 +69,15 @@ async function extractTextFromPlainBuffer(buffer: Buffer): Promise<string> {
 
 async function extractRawText(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".pdf") {
-    return extractTextFromPdf(filePath);
-  }
-  if (ext === ".docx") {
-    return extractTextFromDocx(filePath);
-  }
+  if (ext === ".pdf") return extractTextFromPdf(filePath);
+  if (ext === ".docx") return extractTextFromDocx(filePath);
   return extractTextFromPlain(filePath);
 }
 
 async function extractRawTextFromBuffer(buffer: Buffer, originalName: string): Promise<string> {
   const ext = path.extname(originalName).toLowerCase();
-  if (ext === ".pdf") {
-    return extractTextFromPdfBuffer(buffer);
-  }
-  if (ext === ".docx") {
-    return extractTextFromDocxBuffer(buffer);
-  }
+  if (ext === ".pdf") return extractTextFromPdfBuffer(buffer);
+  if (ext === ".docx") return extractTextFromDocxBuffer(buffer);
   return extractTextFromPlainBuffer(buffer);
 }
 
@@ -116,6 +99,7 @@ function parseResumeText(rawTextInput: string): Resume {
     | "projects"
     | "certifications"
     | null = null;
+
   const summaryLines: string[] = [];
 
   for (const line of lines) {
@@ -164,28 +148,16 @@ function parseResumeText(rawTextInput: string): Resume {
         certifications.push(line);
         break;
       case "education":
-        educations.push({
-          institution: line,
-        });
+        educations.push({ institution: line });
         break;
       case "experience":
         if (BULLET_REGEX.test(line)) {
           if (experiences.length === 0) {
-            experiences.push({
-              company: "",
-              title: "",
-              descriptionBullets: [],
-            });
+            experiences.push({ company: "", title: "", descriptionBullets: [] });
           }
-          experiences[experiences.length - 1]?.descriptionBullets.push(
-            line.replace(BULLET_REGEX, "")
-          );
+          experiences[experiences.length - 1]?.descriptionBullets.push(line.replace(BULLET_REGEX, ""));
         } else {
-          experiences.push({
-            company: line,
-            title: "",
-            descriptionBullets: [],
-          });
+          experiences.push({ company: line, title: "", descriptionBullets: [] });
         }
         break;
       default:
@@ -212,10 +184,7 @@ export async function parseResume(filePath: string): Promise<Resume> {
   return parseResumeText(rawText);
 }
 
-export async function parseResumeFromBuffer(
-  buffer: Buffer,
-  originalName: string
-): Promise<Resume> {
+export async function parseResumeFromBuffer(buffer: Buffer, originalName: string): Promise<Resume> {
   const rawText = await extractRawTextFromBuffer(buffer, originalName);
   return parseResumeText(rawText);
 }
